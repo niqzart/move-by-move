@@ -213,27 +213,47 @@ class Board:
 
         self._move(Move(field_from, field_to))
 
+    def generate_captures(
+        self,
+        field_from: int,
+        piece: Filler,
+        current: int,
+        *captures: int,
+    ) -> Iterator[Move]:
+        stopped: bool = True
+        for direction, index in self[current]:
+            if (
+                index not in captures
+                and (next_index := self[index][direction]) is not None
+                and not self[index].is_empty()
+                and self[index] != piece
+                and self[next_index].is_empty()
+            ):
+                stopped = False
+                yield from self.generate_captures(
+                    field_from, piece, next_index, *captures, index
+                )
+
+        if stopped and field_from != current:
+            yield Move(field_from, current, list(captures))
+
     def generate_moves(self, field_from: int) -> list[Move]:
         piece: Filler = self[field_from].filler
         if piece is None:
             return []
 
-        result = []
-        for direction, index in self[field_from]:
-            if (
-                (next_index := self[index][direction]) is not None
-                and not self[index].is_empty()
-                and self[index] != piece
-                and self[next_index].is_empty()
-            ):
-                result.append(Move(field_from, next_index, [index]))
-
+        result: list[Move] = list(self.generate_captures(field_from, piece, field_from))
         if len(result) == 0:
             return [
                 Move(field_from, index)
                 for direction, index in self[field_from]
                 if self[index].is_empty() and direction.is_up() == piece.going_up()
             ]
+
+        # remove short moves
+        # max_captured = max(result, key=len)
+        # return [move for move in result if len(move) == max_captured]
+
         return result
 
 
