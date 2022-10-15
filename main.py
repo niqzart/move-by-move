@@ -218,11 +218,23 @@ class Board:
         if piece is None:
             return []
 
-        return [
-            Move(field_from, index)
-            for direction, index in self[field_from]
-            if self[index].is_empty() and direction.is_up() == piece.going_up()
-        ]
+        result = []
+        for direction, index in self[field_from]:
+            if (
+                (next_index := self[index][direction]) is not None
+                and not self[index].is_empty()
+                and self[index] != piece
+                and self[next_index].is_empty()
+            ):
+                result.append(Move(field_from, next_index, [index]))
+
+        if len(result) == 0:
+            return [
+                Move(field_from, index)
+                for direction, index in self[field_from]
+                if self[index].is_empty() and direction.is_up() == piece.going_up()
+            ]
+        return result
 
 
 if __name__ == "__main__":
