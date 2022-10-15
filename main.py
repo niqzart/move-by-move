@@ -286,8 +286,46 @@ class Board:
         return result
 
 
+class TaskBoard(Board):
+    def __init__(
+        self,
+        factor: int = 4,
+        *,
+        white_pieces: set[int] = None,
+        black_pieces: set[int] = None,
+        white_kings: set[int] = None,
+        black_kings: set[int] = None,
+    ):
+        self.white_pieces: set[int] = white_pieces or set()
+        self.black_pieces: set[int] = black_pieces or set()
+        self.white_kings: set[int] = white_kings or set()
+        self.black_kings: set[int] = black_kings or set()
+
+        all_sets = (
+            self.white_pieces,
+            self.black_pieces,
+            self.white_kings,
+            self.black_kings,
+        )
+        if len(set.union(*all_sets)) != sum(map(len, all_sets)):
+            raise ValueError("Collision: only one piece is allowed per cell")
+
+        super().__init__(factor)
+
+    def initial_filler(self, i: int) -> Piece | None:
+        if i in self.black_pieces:
+            return Piece(Filler.BLACK)
+        if i in self.white_pieces:
+            return Piece(Filler.WHITE)
+        if i in self.black_kings:
+            return Piece(Filler.BLACK, king=True)
+        if i in self.white_kings:
+            return Piece(Filler.WHITE, king=True)
+        return None
+
+
 if __name__ == "__main__":
-    b = Board()
+    b = TaskBoard(white_pieces={0, 1, 2}, black_kings={23, 24})
     print(b.output())
     while True:
         while True:
