@@ -17,6 +17,7 @@ def clear():
 class Move:
     field_from: int
     field_to: int
+    promotes: bool
     captured: list[int] = None
 
     def __post_init__(self):
@@ -39,8 +40,23 @@ class Filler(str, Enum):
             return self.WHITE
         raise NotImplementedError()
 
+
+@dataclass()
+class Piece:
+    filler: Filler
+    king: bool = False
+
     def going_up(self):
-        return self == self.WHITE
+        return self.filler == Filler.WHITE
+
+    def promote(self):
+        self.king = True
+
+    def __str__(self) -> str:
+        result = self.filler.value
+        if self.king:
+            return result.upper()
+        return result
 
 
 class Direction(Enum):
@@ -56,7 +72,7 @@ class Direction(Enum):
 
 @dataclass()
 class Space:
-    filler: Filler | None = None
+    piece: Piece | None = None
     directions: dict[Direction, int] = None
 
     def __post_init__(self):
@@ -65,18 +81,18 @@ class Space:
 
     def __eq__(self, other) -> bool:
         if isinstance(other, Filler):
-            return self.filler == other
+            return self.piece.filler == other
         return super().__eq__(other)
 
     def __ne__(self, other) -> bool:
         if isinstance(other, Filler):
-            return self.filler != other
+            return self.piece.filler != other
         return super().__ne__(other)
 
     def __str__(self) -> str:
         if self.is_empty():
             return " "
-        return self.filler.value
+        return str(self.piece)
 
     def __getitem__(self, item: Direction) -> int | None:
         return self.directions.get(item)
@@ -87,19 +103,19 @@ class Space:
                 yield direction, index
 
     def is_empty(self) -> bool:
-        return self.filler is None
+        return self.piece is None
 
 
 class Board:
-    def initial_filler(self, i: int) -> Filler | None:
+    def initial_filler(self, i: int) -> Piece | None:
         if i < self.factor * (self.factor - 1):
-            return Filler.BLACK
+            return Piece(Filler.BLACK)
         elif i >= self.factor * (self.factor + 1):
-            return Filler.WHITE
+            return Piece(Filler.WHITE)
         return None
 
     def start_space(self, i: int) -> Space:
-        filler: Filler = self.initial_filler(i)
+        filler: Piece = self.initial_filler(i)
 
         current_line: int = i // self.factor
         line_bonus: int = current_line % 2
@@ -131,8 +147,8 @@ class Board:
             for i in range(self.size)
         ]
 
-    def __setitem__(self, key: int, value: Filler | None):
-        self.data[key].filler = value
+    def __setitem__(self, key: int, value: Piece | None):
+        self.data[key].piece = value
 
     def __getitem__(self, item: int) -> Space:
         return self.data[item]
@@ -189,18 +205,26 @@ class Board:
 
         return line * self.factor + place // 2
 
+    def need_promotion(self, position: int, piece: Piece = None):
+        if piece is None:
+            piece = self[position]
+        return position // self.factor == (0 if piece.going_up() else self.factor - 1)
+
     def _move(self, move: Move):
         if self[move.field_from].is_empty() is None:
             raise ValueError("Can't move an empty space")
         if not self[move.field_to].is_empty():
             raise ValueError("Can't go to a non-empty space")
-        self[move.field_to] = self[move.field_from].filler
+        self[move.field_to] = self[move.field_from].piece
         self[move.field_from] = None
 
         for capture in move.captured:
             if self[capture] is None:
                 raise ValueError("Can't capture an empty space")
             self[capture] = None
+
+        if move.promotes:
+            self[move.field_from].piece.promote()
 
     def move(self, simple_move: str):
         if not isinstance(simple_move, str):
@@ -211,15 +235,20 @@ class Board:
         field_from: int = self.coord_convert(simple_move[:2])
         field_to: int = self.coord_convert(simple_move[2:])
 
-        self._move(Move(field_from, field_to))
+        self._move(Move(field_from, field_to, self.need_promotion(field_from)))
 
     def generate_captures(
         self,
         field_from: int,
-        piece: Filler,
+        piece: Piece,
         current: int,
+        promotes: bool = False,
         *captures: int,
     ) -> Iterator[Move]:
+        if not piece.king and self.need_promotion(current, piece):
+            promotes = True
+            piece.promote()
+
         stopped: bool = True
         for direction, index in self[current]:
             if (
@@ -231,21 +260,21 @@ class Board:
             ):
                 stopped = False
                 yield from self.generate_captures(
-                    field_from, piece, next_index, *captures, index
+                    field_from, piece, next_index, promotes, *captures, index
                 )
 
         if stopped and field_from != current:
-            yield Move(field_from, current, list(captures))
+            yield Move(field_from, current, promotes, list(captures))
 
     def generate_moves(self, field_from: int) -> list[Move]:
-        piece: Filler = self[field_from].filler
+        piece: Piece = self[field_from].piece
         if piece is None:
             return []
 
         result: list[Move] = list(self.generate_captures(field_from, piece, field_from))
         if len(result) == 0:
             return [
-                Move(field_from, index)
+                Move(field_from, index, self.need_promotion(field_from, piece))
                 for direction, index in self[field_from]
                 if self[index].is_empty() and direction.is_up() == piece.going_up()
             ]
