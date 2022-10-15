@@ -12,6 +12,20 @@ def clear():
     system("cls" if name == "nt" else "clear")
 
 
+@dataclass()
+class Move:
+    field_from: int
+    field_to: int
+    captured: list[int] = None
+
+    def __post_init__(self):
+        if self.captured is None:
+            self.captured = []
+
+    def __len__(self):
+        return len(self.captured)
+
+
 class Filler(str, Enum):
     value: str
     WHITE = "o"
@@ -54,6 +68,9 @@ class Board:
             Space(self.initial_filler(i))
             for i in range(self.size)
         ]
+
+    def __setitem__(self, key: int, value: Filler | None):
+        self.data[key].filler = value
 
     def __getitem__(self, item: int) -> Space:
         return self.data[item]
@@ -109,14 +126,38 @@ class Board:
 
         return line * self.factor + place // 2
 
+    def _move(self, move: Move):
+        if self[move.field_from].is_empty() is None:
+            raise ValueError("Can't move an empty space")
+        if not self[move.field_to].is_empty():
+            raise ValueError("Can't go to a non-empty space")
+        self[move.field_to] = self[move.field_from].filler
+        self[move.field_from] = None
+
+        for capture in move.captured:
+            if self[capture] is None:
+                raise ValueError("Can't capture an empty space")
+            self[capture] = None
+
+    def move(self, simple_move: str):
+        if not isinstance(simple_move, str):
+            raise ValueError("Simple move is not a string")
+        if len(simple_move) != 4:
+            raise ValueError("Simple move's length is not 4")
+
+        field_from: int = self.coord_convert(simple_move[:2])
+        field_to: int = self.coord_convert(simple_move[2:])
+
+        self._move(Move(field_from, field_to))
+
 
 if __name__ == "__main__":
     b = Board()
-    print(b.output())
     while True:
+        print(b.output())
         while True:
             try:
-                print("Detected coord:", b.coord_convert(input()))
+                b.move(input())
                 break
             except ValueError as e:
                 print(e)
