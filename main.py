@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import Enum
 from os import system, name
 
 UPPER = ord("A")
@@ -10,22 +12,51 @@ def clear():
     system("cls" if name == "nt" else "clear")
 
 
+class Filler(str, Enum):
+    value: str
+    WHITE = "o"
+    BLACK = "x"
+
+    def __invert__(self):
+        if self == self.WHITE:
+            return self.BLACK
+        elif self == self.BLACK:
+            return self.WHITE
+        raise NotImplementedError()
+
+
+@dataclass()
+class Space:
+    filler: Filler | None = None
+
+    def __str__(self) -> str:
+        if self.is_empty():
+            return " "
+        return self.filler.value
+
+    def is_empty(self) -> bool:
+        return self.filler is None
+
+
 class Board:
-    def initial_filler(self, i: int) -> str:
+    def initial_filler(self, i: int) -> Filler | None:
         if i < self.factor * (self.factor - 1):
-            return "x"
+            return Filler.BLACK
         elif i >= self.factor * (self.factor + 1):
-            return "o"
-        return " "
+            return Filler.WHITE
+        return None
 
     def __init__(self, factor: int = 4):
         self.factor: int = factor
         self.lines: int = self.factor * 2
         self.size: int = self.factor * self.lines
-        self.data: list[str] = [
-            self.initial_filler(i)
+        self.data: list[Space] = [
+            Space(self.initial_filler(i))
             for i in range(self.size)
         ]
+
+    def __getitem__(self, item: int) -> Space:
+        return self.data[item]
 
     def _output(self):
         for i in range(self.lines, 0, -1):
@@ -35,7 +66,7 @@ class Board:
             for j in range(self.factor):
                 # index: int = self.data[(i - 1) * self.factor + j]
                 index: int = (self.lines - i) * self.factor + j
-                yield f"{self.data[index]}|"
+                yield f"{self[index]}|"
                 if j != self.factor - 1:
                     yield " |"
             if i % 2 == 1:
